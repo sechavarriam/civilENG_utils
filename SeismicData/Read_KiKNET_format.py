@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-f = open('SeismicData\TestData\Tsukidate-MYG004\MYG0041103111446.NS', 'r')
+f = open('TestData/Tsukidate-MYG004/MYG0041103111446.NS', 'r')
 
 Date      = (f.readline().split())[-2]
 Latitude  = float((f.readline().split())[-1])
