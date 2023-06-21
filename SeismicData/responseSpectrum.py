@@ -11,16 +11,9 @@ from ReadUtils import importAccelerogram
 #file = 'Accelerograms/Kobe.txt'
 file = 'Accelerograms/Elcentro.dat'
 #file = 'Accelerograms/Northridge.txt'
-
-DATA = importAccelerogram(file)
-
-
-time = DATA[:][0] # Time discretization corresponding to Ag
-ag   = DATA[:][1] # Ground Acceleration                     
+#file = 'Accelerograms/TestFree_ElCentro.dat'
 
 
-
-n = len(time)
 #========================================================================================
 
 
@@ -29,36 +22,38 @@ n = len(time)
 # Usefull function definitions =====================================================================
 
 # Clough Eq 7.5.
-def u(xi,w,u0,v0,P0,P1,h):
+def u(xi,w,u0,v0,P0,P1,dt):
     
-    alpha = (P1-P0)/h
+    alpha = (P1-P0)/dt
     wD = w*math.sqrt(1-xi**2) #Damped Frequency
 
-    A0 = P0/(w**2) - 2*xi*alpha/(w**3)
-    A1 = alpha/(w**2)
-    A2 = u0-A0
-    A3 = (v0+(xi*w*A2)-A1)/wD
+    A0 = P0/(w**2) - (2*xi*alpha)/(w**3) #[m]
+    A1 = alpha/(w**2)                    #[m]/[s]
+    A2 = u0-A0                           #[m]
+    A3 = (v0+(xi*w*A2)-A1)/wD            #[m]
     
-    return lambda t: A0+A1*t+(A2*math.cos(wD*t)+A3*math.sin(wD*t))*math.exp(-xi*w*t)
+    return lambda t: A0 + A1*t + (A2*math.cos(wD*t)+A3*math.sin(wD*t))*math.exp(-xi*w*t)
 
 def v(xi,w,u0,v0,P0,P1,h):
+
     alpha = (P1-P0)/h
     wD = w*math.sqrt(1-xi**2) #Damped Frequency
 
-    A0 = P0/(w**2) - 2*xi*alpha/(w**3)
-    A1 = alpha/(w**2)
-    A2 = u0-A0
-    A3 = (v0+ (xi*w*A2) -A1)/wD
+    A0 = P0/(w**2) - (2*xi*alpha)/(w**3) #[m]
+    A1 = alpha/(w**2)                    #[m]/[s]
+    A2 = u0-A0                           #[m]
+    A3 = (v0+(xi*w*A2)-A1)/wD            #[m]
 
     B2 =  (wD*A3-xi*w*A2)
     B3 = -(wD*A2+xi*w*A3)
 
-    return lambda t: A1*t+(B2*math.cos(wD*t)+B3*math.sin(wD*t))*math.exp(-xi*w*t)
+    return lambda t: A1*t + (B2*math.cos(wD*t)+B3*math.sin(wD*t))*math.exp(-xi*w*t)
 
 def a(xi,w,u0,v0,P0,P1,h):
     
     alpha = (P1-P0)/h
-    wD = w*math.sqrt(1-xi**2) #Damped Frequency
+
+    wD = w*math.sqrt(1 - xi**2) #Damped Frequency
 
     A0 = P0/(w**2) - 2*xi*alpha/(w**3)
     A1 = alpha/(w**2)
@@ -72,19 +67,14 @@ def a(xi,w,u0,v0,P0,P1,h):
     C3 = -(wD*B2+xi*w*B3)
 
     return lambda t: (C2*math.cos(wD*t)+C3*math.sin(wD*t))*math.exp(-xi*w*t)
-    #C1 = -xi*w*(wD*A3-xi*w*A2)- wD*(wD*A2+xi*w*A3)
-    #C2 = -wD*(wD*A3-xi*w*A2) + xi*w*(wD*A2+xi*w*A3)
-    #return lambda t: C1*math.exp(-xi*w*t)*math.cos(wD*t)+ C2*math.exp(-xi*w*t)*math.sin(wD*t)
-
-alpha = lambda P0,P1,h: (P1-P0)/h
 
 
 def abs_maxF(f,x0,x1,n_points):
     # f is a lambda scalar valued function defined in [x0,x1]
 
     step = (x1-x0)/n_points
-    x_eval = (xi*step for xi in range(0,n_points+1)) #Evaluation test points
-    #x_eval = [xi*step for xi in range(0,n_points+1)] #Evaluation test points
+    #x_eval = (xi*step for xi in range(0,n_points+1)) #Evaluation test points
+    x_eval = [xi*step for xi in range(0,n_points+1)] #Evaluation test points
     
     #for x in x_eval:
     #    print(x,f(x)) 
@@ -128,16 +118,28 @@ def plot_picewise_lambda_localX(ax,F,X, N=5):
 
 # Spectrum computations ============================================================================
 
-xi = 0.05
+DATA = importAccelerogram(file,9.80665)
+
+time = DATA[:][0] # Time discretization corresponding to Ag
+ag   = DATA[:][1] # Ground Acceleration [m]/[s^2]                   
+
+
+n = len(time)
+
+xi = 0.02
 
 Ti = 0 # [s]
 Tf = 10 # [s]
 
-step = 0.1
+step = 0.01
+
+Tf += step
+
 n_steps = int((Tf-Ti)/step)
 
 T_array = [Ti+t*step for t in range(0,n_steps)]
-T_array.pop(0)
+
+if T_array[0]==0:T_array.pop(0)
 
 dis_Spect = []
 vel_Spect = []
@@ -147,7 +149,9 @@ acc_Spect = []
 
 for T in T_array:
     # SOLUTION FOR SPECIFIC PERIOD ===================================
-    w=(2*math.pi)/T
+    
+    w=(2*math.pi)/T #Natural frequency
+
 
     u_t = [] #To store the solution of each time interval
     v_t = []
@@ -160,21 +164,34 @@ for T in T_array:
     global_max_v = 0
     global_max_a = 0
 
-    N_points = 3
+    N_points = 10
 
     for i in range(n-1):
+
         dt = time[i+1]-time[i]
-        u_t.append(u(xi,w,u0,v0,ag[i],ag[i+1],dt))
+
+        u_t.append(u(xi,w,u0,v0,ag[i],ag[i+1],dt)) #OK
+
         v_t.append(v(xi,w,u0,v0,ag[i],ag[i+1],dt))
-        a_t.append(a(xi,w,u0,v0,ag[i],ag[i+1],dt))
+
+        a_t.append(a(xi,w,u0,v0,ag[i],ag[i+1],dt)) #OK
+
+        #print(dt)
 
         u0 = u_t[i](dt)
-        v0 = v_t[i](dt)
+
+        local_max_v = max([v0,(u_t[i](dt)-u_t[i](0))/dt])
+
+        v0 = (u_t[i](dt)-u_t[i](0))/dt
+
+        #print(v0,"---",v_t[i](dt),"---",v0-v_t[i](dt))
+        #v0 = v_t[i](dt)
 
         local_max_u = abs_maxF(u_t[i],0,dt,N_points)
         if global_max_u < local_max_u: global_max_u = local_max_u
 
-        local_max_v = abs_maxF(v_t[i],0,dt,N_points)
+        
+        #local_max_v = abs_maxF(v_t[i],0,dt,N_points)
         if global_max_v < local_max_v: global_max_v = local_max_v
 
         local_max_a = abs_maxF(a_t[i],0,dt,N_points)
@@ -208,9 +225,9 @@ ax[1,0].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax[1,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 
 # =====================================================================
-# PLOT LAST RESPONSE.
-
-
+## PLOT LAST RESPONSE.
+#
+#
 fig, ax2 = plt.subplots(2,2)
 
 ax2[0,1].set_title('Desplazamiento')
@@ -227,6 +244,9 @@ ax2[0,0].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax2[0,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax2[1,0].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax2[1,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
+
+# =====================================================================
+
 
 #print(global_max_a)
 #ax = plot_picewise_lambda_localX(ax,a_t,time,10)
