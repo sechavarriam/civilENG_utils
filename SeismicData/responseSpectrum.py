@@ -1,140 +1,41 @@
 # Cálculo del espectro de respuesta para un sismo.
-#
-# Method: Piecewise exact solution (e.g. Clough 1999)
 
 import math
 import matplotlib.pyplot as plt
 
+import FunctionUtils as F
+
 from ReadUtils import importAccelerogram
+
+from Dynamic_Methods import u_exact_linealExitation as u
+from Dynamic_Methods import v_exact_linealExitation as v
+from Dynamic_Methods import a_exact_linealExitation as a
+
+# Method: Piecewise exact solution (e.g. Clough 1999)
 
 # INUPT DATA
 #file = 'Accelerograms/Kobe.txt'
 file = 'Accelerograms/Elcentro.dat'
 #file = 'Accelerograms/Northridge.txt'
 #file = 'Accelerograms/TestFree_ElCentro.dat'
-
-
 #========================================================================================
-
-
-
-
-# Usefull function definitions =====================================================================
-
-# Clough Eq 7.5.
-def u(xi,w,u0,v0,P0,P1,dt):
-    
-    alpha = (P1-P0)/dt
-    wD = w*math.sqrt(1-xi**2) #Damped Frequency
-
-    A0 = P0/(w**2) - (2*xi*alpha)/(w**3) #[m]
-    A1 = alpha/(w**2)                    #[m]/[s]
-    A2 = u0-A0                           #[m]
-    A3 = (v0+(xi*w*A2)-A1)/wD            #[m]
-    
-    return lambda t: A0 + A1*t + (A2*math.cos(wD*t)+A3*math.sin(wD*t))*math.exp(-xi*w*t)
-
-def v(xi,w,u0,v0,P0,P1,h):
-
-    alpha = (P1-P0)/h
-    wD = w*math.sqrt(1-xi**2) #Damped Frequency
-
-    A0 = P0/(w**2) - (2*xi*alpha)/(w**3) #[m]
-    A1 = alpha/(w**2)                    #[m]/[s]
-    A2 = u0-A0                           #[m]
-    A3 = (v0+(xi*w*A2)-A1)/wD            #[m]
-
-    B2 =  (wD*A3-xi*w*A2)
-    B3 = -(wD*A2+xi*w*A3)
-
-    return lambda t: A1*t + (B2*math.cos(wD*t)+B3*math.sin(wD*t))*math.exp(-xi*w*t)
-
-def a(xi,w,u0,v0,P0,P1,h):
-    
-    alpha = (P1-P0)/h
-
-    wD = w*math.sqrt(1 - xi**2) #Damped Frequency
-
-    A0 = P0/(w**2) - 2*xi*alpha/(w**3)
-    A1 = alpha/(w**2)
-    A2 = u0-A0
-    A3 = (v0+ (xi*w*A2) -A1)/wD
-
-    B2 =  (wD*A3-xi*w*A2)
-    B3 = -(wD*A2+xi*w*A3)
-
-    C2 =  (wD*B3-xi*w*B2)
-    C3 = -(wD*B2+xi*w*B3)
-
-    return lambda t: (C2*math.cos(wD*t)+C3*math.sin(wD*t))*math.exp(-xi*w*t)
-
-
-def abs_maxF(f,x0,x1,n_points):
-    # f is a lambda scalar valued function defined in [x0,x1]
-
-    step = (x1-x0)/n_points
-    #x_eval = (xi*step for xi in range(0,n_points+1)) #Evaluation test points
-    x_eval = [xi*step for xi in range(0,n_points+1)] #Evaluation test points
-    
-    #for x in x_eval:
-    #    print(x,f(x)) 
-
-    #print("maximo------> ",max([abs(f(x)) for x in x_eval]) )
-    #print("===============================")
-
-    return max([abs(f(x)) for x in x_eval])
-    
-
-def fplot(ax,f,x0,x1,translation=0,n=5):
-    # plots a lambda real function f in a defined interval [x0,x1] in n line segments, in a given axis object.
-    
-    step = (x1-x0)/n
-    x_eval = [x0+xi*step for xi in range(0,n+1)] #Evaluation test points
-    f_eval = [f(x) for x in x_eval]
-
-    x_plot = [x+translation for x in x_eval]
-
-
-    ax.plot(x_plot,f_eval,'b') 
-
-    return ax
-
-def plot_picewise_lambda(ax,F,X,N=5):
-    n = len(F) # Extract interval number (lenX)=n+1)
-
-    for t in range(n):
-        ax = fplot(ax,F[t],X[t],X[t+1],0, N)
-
-    return ax
-     
-def plot_picewise_lambda_localX(ax,F,X, N=5):
-    n = len(F) # Extract interval number (lenX)=n+1)
-
-    
-    for t in range(n):
-        ax = fplot(ax,F[t],0,X[t+1]-X[t],X[t],N)
-
-    return ax
 
 # Spectrum computations ============================================================================
 
 DATA = importAccelerogram(file,9.80665)
 
 time = DATA[:][0] # Time discretization corresponding to Ag
-ag   = DATA[:][1] # Ground Acceleration [m]/[s^2]                   
-
+ag   = DATA[:][1] # Ground Acceleration [m]/[s^2]
 
 n = len(time)
 
-xi = 0.02
+xi = 0.05
 
 Ti = 0 # [s]
 Tf = 10 # [s]
 
-step = 0.01
-
+step = 0.1
 Tf += step
-
 n_steps = int((Tf-Ti)/step)
 
 T_array = [Ti+t*step for t in range(0,n_steps)]
@@ -145,13 +46,10 @@ dis_Spect = []
 vel_Spect = []
 acc_Spect = []
 
-# Solution for Fixed T
-
 for T in T_array:
     # SOLUTION FOR SPECIFIC PERIOD ===================================
-    
-    w=(2*math.pi)/T #Natural frequency
 
+    w=(2*math.pi)/T #Natural frequency
 
     u_t = [] #To store the solution of each time interval
     v_t = []
@@ -169,32 +67,26 @@ for T in T_array:
     for i in range(n-1):
 
         dt = time[i+1]-time[i]
-
         u_t.append(u(xi,w,u0,v0,ag[i],ag[i+1],dt)) #OK
-
         v_t.append(v(xi,w,u0,v0,ag[i],ag[i+1],dt))
-
         a_t.append(a(xi,w,u0,v0,ag[i],ag[i+1],dt)) #OK
 
-        #print(dt)
-
         u0 = u_t[i](dt)
-
         local_max_v = max([v0,(u_t[i](dt)-u_t[i](0))/dt])
 
-        v0 = (u_t[i](dt)-u_t[i](0))/dt
+        #v0 = (u_t[i](dt)-u_t[i](0))/dt
 
         #print(v0,"---",v_t[i](dt),"---",v0-v_t[i](dt))
-        #v0 = v_t[i](dt)
+        v0 = v_t[i](dt)
 
-        local_max_u = abs_maxF(u_t[i],0,dt,N_points)
+        local_max_u = F.abs_maxF(u_t[i],0,dt,N_points)
         if global_max_u < local_max_u: global_max_u = local_max_u
 
         
-        #local_max_v = abs_maxF(v_t[i],0,dt,N_points)
+        local_max_v = F.abs_maxF(v_t[i],0,dt,N_points)
         if global_max_v < local_max_v: global_max_v = local_max_v
 
-        local_max_a = abs_maxF(a_t[i],0,dt,N_points)
+        local_max_a = F.abs_maxF(a_t[i],0,dt,N_points)
         if global_max_a < local_max_a: global_max_a = local_max_a
 
         #print(local_max_u)
@@ -226,8 +118,7 @@ ax[1,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 
 # =====================================================================
 ## PLOT LAST RESPONSE.
-#
-#
+
 fig, ax2 = plt.subplots(2,2)
 
 ax2[0,1].set_title('Desplazamiento')
@@ -236,9 +127,9 @@ ax2[1,0].set_title('Velocidad')
 ax2[1,1].set_title('Aceleración')
 
 ax2[0,0].plot(time,ag) # Sismo. Acelerograma
-ax2[0,1] = plot_picewise_lambda_localX(ax2[0,1],u_t,time,100)
-ax2[1,0] = plot_picewise_lambda_localX(ax2[1,0],v_t,time,100)
-ax2[1,1] = plot_picewise_lambda_localX(ax2[1,1],a_t,time,100)
+ax2[0,1] = F.plot_picewise_lambda_localX(ax2[0,1],u_t,time,100)
+ax2[1,0] = F.plot_picewise_lambda_localX(ax2[1,0],v_t,time,100)
+ax2[1,1] = F.plot_picewise_lambda_localX(ax2[1,1],a_t,time,100)
 
 ax2[0,0].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax2[0,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
@@ -246,28 +137,6 @@ ax2[1,0].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 ax2[1,1].grid(color="gray", which="both", linestyle=':', linewidth=0.5)
 
 # =====================================================================
-
-
-#print(global_max_a)
-#ax = plot_picewise_lambda_localX(ax,a_t,time,10)
-
-#ax.plot(time,ag)
-
-
-    # Max evaluat. Use ternary operator
-
-#print(acc_Spect)
-
-## TEST ==========================================
-#f_test_1 =  lambda x: -(x-1)**2
-#f_test_2 =  lambda t: t
-
-
-#F = [f_test_1,f_test_2]
-#t = [0,1.5,2]
-
-#ax = plot_picewise_lambda(ax,F,t,100)
-#ax = plot_picewise_lambda_localX(ax,F,t,100)
 
 plt.show()
 
