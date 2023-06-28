@@ -1,6 +1,5 @@
 
 
-
 def abs_maxF(f,x0,x1,n_points):
     # f is a lambda scalar valued function defined in [x0,x1]
 
